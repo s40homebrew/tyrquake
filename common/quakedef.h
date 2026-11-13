@@ -61,8 +61,16 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	ROLL	2
 
 
+#ifdef S40
+#define	MAX_QPATH	64	// max length of a quake game pathname
+#else
 #define	MAX_QPATH	PATH_MAX_LENGTH	// max length of a quake game pathname
+#endif
+#ifdef S40
+#define	MAX_OSPATH	256	// max length of a filesystem pathname
+#else
 #define	MAX_OSPATH	PATH_MAX_LENGTH	// max length of a filesystem pathname
+#endif
 
 #define	ON_EPSILON	0.1	// point on plane side epsilon
 
@@ -73,15 +81,27 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //
 // per-level limits
 //
+#ifdef S40
+#define	MAX_EDICTS	600	// FIXME: Arbitrary increase, make dynamic?
+#else
 #define	MAX_EDICTS	8192	// FIXME: Arbitrary increase, make dynamic?
+#endif
 #define	MAX_LIGHTSTYLES	64
 /*
  * Model and sound limits depend on the net protocol version being used
  * Standard protocol sends the model/sound index as a byte (max = 256), but
  * other protocols may send as a short (up to 65536, potentially).
  */
+#ifdef S40
+#define MAX_MODELS      256
+#else
 #define MAX_MODELS      1024
+#endif
+#ifdef S40
+#define MAX_SOUNDS      256
+#else
 #define MAX_SOUNDS      1024
+#endif
 
 #define	SAVEGAME_COMMENT_LENGTH	39
 

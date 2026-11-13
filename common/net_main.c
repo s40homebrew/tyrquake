@@ -33,7 +33,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #endif
 #elif defined(VITA) || defined(_3DS)
 #else
+#ifndef S40
 #include <arpa/inet.h>
+#endif
 #endif
 
 #include "cmd.h"

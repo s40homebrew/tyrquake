@@ -22,6 +22,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "quakedef.h"
 #include "r_local.h"
 #include "d_local.h"
+#ifdef S40
+#include "render_s40.h"
+#endif
 
 #define SKY_SPAN_SHIFT	5
 #define SKY_SPAN_MAX	(1 << SKY_SPAN_SHIFT)
@@ -129,10 +132,17 @@ void D_DrawSkyScans8 (espan_t *pspan)
                u += spancountminus1;
                D_Sky_uv_To_st (u, v, &snext, &tnext, &snext2, &tnext2); // Manoel Kasimier - smooth sky - edited
 
+#ifdef S40
+               sstep = S40_SpanDivide(snext - s, spancountminus1);
+               tstep = S40_SpanDivide(tnext - t, spancountminus1);
+               sstep2 = S40_SpanDivide(snext2 - s2, spancountminus1);
+               tstep2 = S40_SpanDivide(tnext2 - t2, spancountminus1);
+#else
                sstep = (snext - s) / spancountminus1;
                tstep = (tnext - t) / spancountminus1;
                sstep2 = (snext2 - s2) / spancountminus1; // Manoel Kasimier - smooth sky
                tstep2 = (tnext2 - t2) / spancountminus1; // Manoel Kasimier - smooth sky
+#endif
             }
          }
 

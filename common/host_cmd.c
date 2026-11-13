@@ -63,7 +63,9 @@ Host_Quit_f(void)
     CL_Disconnect();
     Host_ShutdownServer(false);
 
-    //Sys_Quit();
+#ifdef S40
+    Sys_Quit();
+#endif
 }
 
 

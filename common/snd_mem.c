@@ -50,7 +50,13 @@ ResampleSfx(sfx_t *sfx, int inrate, int inwidth, const byte *data)
 
    sc->speed  = shm->speed;
    sc->width  = inwidth;
+#ifdef S40
+   /* S_LoadSound accepts mono WAVs only. Marking them stereo makes the
+    * equal-rate 16-bit fast path copy twice the allocated sample count. */
+   sc->stereo = 0;
+#else
    sc->stereo = 1;
+#endif
 
    // resample / decimate to the current source rate
 

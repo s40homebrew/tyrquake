@@ -35,8 +35,16 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 					//  polygon (while processing)
 
 // !!! if this is changed, it must be changed in d_ifacea.h too !!!
+#ifdef S40
+#define	MAXHEIGHT	320
+#else
 #define	MAXHEIGHT	1200
+#endif
+#ifdef S40
+#define	MAXWIDTH	240
+#else
 #define	MAXWIDTH	1920
+#endif
 
 #define INFINITE_DISTANCE	0x10000	// distance that's always guaranteed to
 					//  be farther away than anything in

@@ -1,0 +1,132 @@
+{
+  "fw_os_block_alloc_no_wait": {
+    "address": "0x635790ef",
+    "prefix": "f1b58cb00e48006801070c98",
+    "aligned_word": "0xB5F1E4B2"
+  },
+  "fw_os_block_dealloc": {
+    "address": "0x63579a55",
+    "prefix": "f1b58ab00a9800287ed0db4c",
+    "aligned_word": "0xB08AB5F1"
+  },
+  "fw_os_current_time_read_in_ms": {
+    "address": "0x62e8c381",
+    "prefix": "10b582f1e5fd7d220023d200",
+    "aligned_word": "0xF182B510"
+  },
+  "fw_os_task_own_id_read": {
+    "address": "0x63589ded",
+    "prefix": "10b5f1f732f810bd7cb5079d",
+    "aligned_word": "0xF7F1B510"
+  },
+  "fw_os_msg_receive": {
+    "address": "0x63589e4f",
+    "prefix": "10b5f9f729fd10bd10b5faf7",
+    "aligned_word": "0xB510BD10"
+  },
+  "fw_msg_count": {
+    "address": "0x63589e57",
+    "prefix": "10b5faf7b8f910bd10b5faf7",
+    "aligned_word": "0xB510BD10"
+  },
+  "fw_CM_Timer_Timeout": {
+    "address": "0x635893ad",
+    "prefix": "10b5044600f01cfd22498000",
+    "aligned_word": "0x4604B510"
+  },
+  "fw_CM_ComMgr_ProcessPhonetMessage": {
+    "address": "0x6358c545",
+    "prefix": "f0b58fb00446fdf74ffc4e4b",
+    "aligned_word": "0xB08FB5F0"
+  },
+  "fw_CM_ComMgr_ProcessInternalQueue": {
+    "address": "0x6358c841",
+    "prefix": "30b589b0fdf7d2faa1498000",
+    "aligned_word": "0xB089B530"
+  },
+  "fw_CM_ComMgr_ScanISISubscriptions": {
+    "address": "0x6358a467",
+    "prefix": "f0b5adb0fff7bffc89498000",
+    "aligned_word": "0xB5F0BDF0"
+  },
+  "fw_vm_timer": {
+    "address": "0x808a1479",
+    "prefix": "c038002182b210463d380b28",
+    "aligned_word": "0x210038C0"
+  },
+  "fw_debug_timer": {
+    "address": "0x637f25a3",
+    "prefix": "feb5144e7068002824d00c20",
+    "aligned_word": "0xB5FE4770"
+  },
+  "fw_app_id": {
+    "address": "0x637ab4a9",
+    "prefix": "2b480068002801d040687047",
+    "aligned_word": "0x6800482B"
+  },
+  "fw_event_pop": {
+    "address": "0x808a1691",
+    "prefix": "f8b50d4616461f46e0f6ccf8",
+    "aligned_word": "0x460DB5F8"
+  },
+  "fw_filesys_open": {
+    "address": "0x635ac847",
+    "prefix": "f7b582b005460020c0430126",
+    "aligned_word": "0xB5F7BD70"
+  },
+  "fw_filesys_close": {
+    "address": "0x635ac8e3",
+    "prefix": "01b5da49002082b0c0430090",
+    "aligned_word": "0xB501E7DF"
+  },
+  "fw_filesys_read": {
+    "address": "0x635ac91d",
+    "prefix": "37b5002082b0cb4dc0430c46",
+    "aligned_word": "0x2000B537"
+  },
+  "fw_filesys_write": {
+    "address": "0x635acb47",
+    "prefix": "37b5002082b0404dc0430c46",
+    "aligned_word": "0xB537BD10"
+  },
+  "fw_filesys_lseek": {
+    "address": "0x635ac9d9",
+    "prefix": "17b581b004209c4c01aaa41d",
+    "aligned_word": "0xB081B517"
+  },
+  "fw_filesys_unlink": {
+    "address": "0x635acdd9",
+    "prefix": "7fb5694605460020c0430870",
+    "aligned_word": "0x4669B57F"
+  },
+  "fw_filesys_mkdir": {
+    "address": "0x635ace87",
+    "prefix": "f8b5054600206946c0430870",
+    "aligned_word": "0xB5F8E7CE"
+  },
+  "fw_gdi_wrap_pixels": {
+    "address": "0x635e2717",
+    "prefix": "ffb585b003240746c0480799",
+    "aligned_word": "0xB5FFE7E5"
+  },
+  "fw_gdi_free_context": {
+    "address": "0x635e2c27",
+    "prefix": "0022114617e7ffb581b00546",
+    "aligned_word": "0x2200E6A6"
+  },
+  "fw_ui_refresh": {
+    "address": "0x80870c3b",
+    "prefix": "ffb585b0044632200d460e9f",
+    "aligned_word": "0xB5FFE7F1"
+  },
+  "fw_cache_sync": {
+    "address": "0x63948e50",
+    "prefix": "70402de90040a0e1005081e0",
+    "aligned_word": "0xE92D4070"
+  },
+  "fw_kni_get_object": {
+    "address": "0x6376bc19",
+    "prefix": "084a80001268126a10580860",
+    "aligned_word": "0x00804A08"
+  }
+}

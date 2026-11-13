@@ -88,7 +88,15 @@ static cvar_t precache = { "precache", "1" };
 static cvar_t ambient_level = { "ambient_level", "0.3" };
 static cvar_t ambient_fade = { "ambient_fade", "100" };
 static cvar_t snd_noextraupdate = { "snd_noextraupdate", "0" };
+#ifdef S40
+/* Keep response latency bounded on the handset. The S40 update below also
+ * caps the old 0.3 value saved by version 0.3.0. */
+static cvar_t _snd_mixahead = { "_snd_mixahead", "0.12", true };
+extern void SNDDMA_Submit(void);
+extern void SNDDMA_Shutdown(void);
+#else
 static cvar_t _snd_mixahead = { "_snd_mixahead", "0.1", true };
+#endif
 
 static void SND_Callback_sfxvolume (cvar_t *var)
 {
@@ -167,6 +175,9 @@ S_Init(void)
 void
 S_Shutdown(void)
 {
+#ifdef S40
+   SNDDMA_Shutdown();
+#endif
    if (!sound_started)
       return;
 
@@ -687,13 +698,30 @@ static void S_Update_(void)
       paintedtime = soundtime;
    }
    /* mix ahead of current position */
+#ifdef S40
+   float ahead = _snd_mixahead.value;
+   if (!(ahead >= 0.04f)) ahead = 0.04f;
+   if (ahead > 0.12f) ahead = 0.12f;
+   endtime = soundtime + ahead * shm->speed;
+#else
    endtime = soundtime + _snd_mixahead.value * shm->speed;
+#endif
    samps   = AUDIO_BUFFER_SIZE >> 1;
    if (endtime - soundtime > samps)
       endtime = soundtime + samps;
 
    S_PaintChannels(endtime);
+#ifdef S40
+   SNDDMA_Submit();
+#endif
 }
+
+#ifdef S40
+/* Submit newly received game sounds before the expensive software renderer.
+ * S_Update after rendering still refreshes listener/ambient state and tops
+ * up the queue. Do not apply ambient fades twice per frame. */
+void S_ExtraUpdate(void) { S_Update_(); }
+#endif
 
 /*
  * ============

@@ -26,6 +26,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "quakedef.h"
 #include "r_local.h"
 #include "d_local.h"
+#ifdef S40
+#include "render_s40.h"
+#if S40_FIXED_SPANS
+#include "span_math_s40.h"
+int S40_DrawSpans(espan_t *pspan);
+#endif
+#endif
 
 unsigned char *r_turb_pbase, *r_turb_pdest;
 fixed16_t r_turb_s, r_turb_t, r_turb_sstep, r_turb_tstep;
@@ -293,12 +300,18 @@ idiths = idiths ? ((idiths) - 1) : idiths; \
 iditht = iditht ? ((iditht) - 1) : iditht
 
 //qbism: pointer to pbase and macroize idea from mankrip
-#define WRITEPDEST(i) { pdest[i] = *(pbase + (s >> 16) + (t >> 16) * cachewidth); s+=sstep; t+=tstep;}
+#define WRITEPDEST(i) { pdest[i] = *(pbase + (s >> 16) + (t >> 16) * texture_width); s+=sstep; t+=tstep;}
 
 extern surfcache_t		*pcurrentcache;
 
 void D_DrawSpans16Qb(espan_t *pspan) //qb: up it from 8 to 16.  This + unroll = big speed gain!
 {
+#if defined(S40) && S40_FIXED_SPANS
+   if (S40_DrawSpans(pspan)) return;
+#endif
+   /* Output bytes cannot change the surface-cache stride. Snapshot it so
+    * character-pointer aliasing does not force a global load per texel. */
+   const int texture_width = cachewidth;
    sstep = 0;   // keep compiler happy
    tstep = 0;   // ditto
 
@@ -388,8 +401,13 @@ void D_DrawSpans16Qb(espan_t *pspan) //qb: up it from 8 to 16.  This + unroll = 
 
          if (spancount > 1)
          {
+#ifdef S40
+            sstep = S40_SpanDivide(snext - s, spancount - 1);
+            tstep = S40_SpanDivide(tnext - t, spancount - 1);
+#else
             sstep = (snext - s) / (spancount - 1);
             tstep = (tnext - t) / (spancount - 1);
+#endif
          }
 
          pdest += spancount;
@@ -876,9 +894,17 @@ D_DrawZSpans
 void
 D_DrawZSpans(espan_t *pspan)
 {
+#if defined(S40) && S40_FIXED_SPANS
+   s40_plane depth_plane;
+   int fixed_depth = S40_MakePlane(&depth_plane, d_ziorigin, d_zistepu, d_zistepv);
+#endif
    // FIXME: check for clamping/range problems
    // we count on FP exceptions being turned off to avoid range problems
+#ifdef S40
+   int izistep = S40_DepthFixed(d_zistepu);
+#else
    int izistep = (int)(d_zistepu * 0x8000 * 0x10000);
+#endif
 
    do
    {
@@ -887,13 +913,30 @@ D_DrawZSpans(espan_t *pspan)
 
       int count = pspan->count;
 
-      // calculate the initial 1/z
-      float du = (float)pspan->u;
-      float dv = (float)pspan->v;
+      int izi;
+#if defined(S40) && S40_FIXED_SPANS
+      if (!fixed_depth || !S40_PlaneDepth(&depth_plane, pspan->u, pspan->v, &izi))
+#endif
+      {
+         // calculate the initial 1/z
+         float du = (float)pspan->u;
+         float dv = (float)pspan->v;
 
-      double zi = d_ziorigin + dv * d_zistepv + du * d_zistepu;
-      // we count on FP exceptions being turned off to avoid range problems
-      int   izi = (int)(zi * 0x8000 * 0x10000);
+#ifdef S40
+         /* The expression already evaluates to float. Scaling a finite float
+          * by these powers of two is exact in the depth buffer's valid range;
+          * widening to double only adds soft-float calls on ARM11. */
+         float zi = d_ziorigin + dv * d_zistepv + du * d_zistepu;
+#else
+         double zi = d_ziorigin + dv * d_zistepv + du * d_zistepu;
+#endif
+         // we count on FP exceptions being turned off to avoid range problems
+#ifdef S40
+         izi = S40_DepthFixed(zi);
+#else
+         izi = (int)(zi * 0x8000 * 0x10000);
+#endif
+      }
 
       if ((int32_t)pdest & 0x02)
       {

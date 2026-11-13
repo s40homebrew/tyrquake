@@ -29,8 +29,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // d_iface.h: interface header file for rasterization driver modules
 
-#define WARP_WIDTH		320
-#define WARP_HEIGHT		200
+#ifdef S40
+#define WARP_WIDTH             240
+#define WARP_HEIGHT            320
+#else
+#define WARP_WIDTH             320
+#define WARP_HEIGHT            200
+#endif
 
 // FIXME - was NQ=480, QW=200 - does it matter?
 #define MAX_LBM_HEIGHT	480

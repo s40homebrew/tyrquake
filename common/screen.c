@@ -30,6 +30,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "quakedef.h"
 #include "sbar.h"
 #include "screen.h"
+#ifdef S40
+#include "ui_s40.h"
+#define M_Draw S40_DrawMenu
+#define Sbar_Draw S40_DrawStatusBar
+#define Sbar_IntermissionOverlay S40_DrawIntermission
+#define Sbar_FinaleOverlay S40_DrawFinale
+#endif
 #include "sound.h"
 #include "sys.h"
 #include "view.h"
@@ -104,8 +111,18 @@ qboolean scr_block_drawing;
 static cvar_t scr_centertime = { "scr_centertime", "2" };
 static cvar_t scr_printspeed = { "scr_printspeed", "8" };
 
+#ifdef S40
+static void SCR_ClearBackground(int x,int y,int w,int h) { Draw_Fill(x,y,w,h,0); }
+#else
+#define SCR_ClearBackground Draw_TileClear
+#endif
+
 cvar_t scr_viewsize = { "viewsize", "100", true };
-cvar_t scr_fov = { "fov", "90" };	// 10 - 170
+#ifdef S40
+cvar_t scr_fov = { "fov", "75", true };
+#else
+cvar_t scr_fov = { "fov", "90" };
+#endif	// 10 - 170
 static cvar_t scr_conspeed = { "scr_conspeed", "300" };
 static vrect_t *pconupdate;
 qboolean scr_skipupdate;
@@ -203,7 +220,7 @@ static void SCR_SetUpToDrawConsole(void)
       Sbar_Changed();
    } else if (clearnotify++ < vid.numpages) {
       scr_copytop = 1;
-      Draw_TileClear(0, 0, vid.width, con_notifylines);
+      SCR_ClearBackground(0, 0, vid.width, con_notifylines);
    } else
       con_notifylines = 0;
 }
@@ -282,7 +299,7 @@ SCR_EraseCenterString(void)
     height = qmin(8 * scr_erase_lines, ((int)vid.height) - y - 1);
 
     scr_copytop = 1;
-    Draw_TileClear(0, y, vid.width, height);
+    SCR_ClearBackground(0, y, vid.width, height);
 }
 
 static void
@@ -319,6 +336,10 @@ SCR_DrawCenterString(void)
     else
 	y = 48;
 
+#ifdef S40
+    S40_CenterMessage(start,y,remaining);
+    return;
+#endif
     do {
 	// scan the width of the line
 	for (l = 0; l < 40; l++)
@@ -359,6 +380,10 @@ SCR_DrawNotifyString(void)
 
     y = vid.height * 0.35;
 
+#ifdef S40
+    S40_CenterMessage(start,y,9999);
+    return;
+#endif
     do {
 	// scan the width of the line
 	for (l = 0; l < 40; l++)
@@ -463,6 +488,10 @@ static void SCR_CalcRefdef(void)
 
    //========================================
 
+#ifdef S40
+   /* A shrinking desktop viewport would reintroduce tiled side borders. */
+   if (scr_viewsize.value != 100) Cvar_Set("viewsize", "100");
+#endif
    // bound viewsize
    if (scr_viewsize.value < 30)
       Cvar_Set("viewsize", "30");
@@ -487,6 +516,10 @@ static void SCR_CalcRefdef(void)
       sb_lines = 24;		// no inventory
    else
       sb_lines = 24 + 16 + 8;
+
+#ifdef S40
+   sb_lines = cl.intermission ? 0 : S40_HUD_HEIGHT;
+#endif
 
    // these calculations mirror those in R_Init() for r_refdef, but take no
    // account of water warping
@@ -681,7 +714,7 @@ SCR_UpdateScreen(void)
    if (scr_fullupdate++ < vid.numpages) {
       /* clear the entire screen */
       scr_copyeverything = 1;
-      Draw_TileClear(0, 0, vid.width, vid.height);
+      SCR_ClearBackground(0, 0, vid.width, vid.height);
       Sbar_Changed();
    }
    pconupdate = NULL;

@@ -1,0 +1,512 @@
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import javax.microedition.lcdui.Canvas;
+import javax.microedition.lcdui.Command;
+import javax.microedition.lcdui.CommandListener;
+import javax.microedition.lcdui.Display;
+import javax.microedition.lcdui.Displayable;
+import javax.microedition.lcdui.Font;
+import javax.microedition.lcdui.Graphics;
+import javax.microedition.lcdui.Image;
+import javax.microedition.midlet.MIDlet;
+
+/** Nokia 301 Dual SIM RM-839 02.33 only; ARM11 switch-carrier bootstrap.
+ * Java installs the MIDlet and streams the native image in 4 KiB chunks.
+ * One final native invocation owns the complete game until quit/error.
+ * No Java repaint, key callback, filesystem or timing is used during play.
+ */
+public final class QuakeLauncher extends MIDlet implements CommandListener {
+    private static final int FORGED_LENGTH = 0x40000000;
+    private static final int CACHE_SYNC = 0x63948E50;       // ARM
+    private static final int CACHE_FIRST_WORD = 0xE92D4070;
+    private static final int NATIVE_MAGIC = 0x444F4F4D;     // "QUAKE"
+
+    private final Command queryCommand = new Command("Start Quake", Command.OK, 1);
+    private final Command exitCommand = new Command("Exit", Command.EXIT, 2);
+    private Screen screen;
+    private String[] lines = {
+        "QUAKE / RM839 02.33", "Native TyrQuake software",
+        "Data: D:/quake/id1/pak0.pak", "D-pad: move/turn; 5: fire",
+        "1/3: strafe; 0: jump", "2/8: look up/down; 4: center",
+        "7/9: weapons; *: menu", "#: quicksave; 6: quickload",
+        "5 / center: Start Quake"
+    };
+    private int[] result;
+    private byte[] nativeBytes;
+    private boolean running;
+
+    /* result[] is the loader command/return descriptor (native/loader.c).
+     * [0] magic [1] command [2] allocated image [3] status
+     * [4..10] native diagnostics [11..14] loading bounds/entry
+     * [16..79] error text [80] method slot to restore [96..1119] 4KiB transfer.
+     * No transfer calls occur once the game starts.
+     */
+
+    /* Temporary bootstrap objects. No UI objects are allocated while forged. */
+    private int[] payload;
+    private int[] canary;
+    private Object[] pointerBox;
+    private int[] target;
+    private int[] destination;
+    private boolean forged;
+    private int viewBase;
+    private int queryMethod;
+    private int canaryOriginal;
+    private boolean canaryDirty;
+
+    /* The loader uses this target's KNI parameter helper only during loading
+     * and restores its operand stack explicitly. Gameplay never calls KNI. */
+    private static native void nativeQuery(int[] output);
+
+    /* Real Java switch offsets are restored before any resource allocation. */
+    private int carrierCode;
+    private boolean literalsPatched;
+    private int literal0, literal1, literal2, literal3;
+
+    protected void startApp() {
+        if (screen == null) {
+            result = new int[1120];
+            screen = new Screen();
+            screen.addCommand(queryCommand);
+            screen.addCommand(exitCommand);
+            screen.setCommandListener(this);
+            Display.getDisplay(this).setCurrent(screen);
+        }
+    }
+
+    protected void pauseApp() {
+    }
+
+    protected void destroyApp(boolean unconditional) {
+    }
+
+    public void commandAction(Command command, Displayable displayable) {
+        if (command == exitCommand) {
+            notifyDestroyed();
+        } else if (command == queryCommand && !running) {
+            new Thread(new Runnable() { public void run() { runQuery(); } }).start();
+        }
+    }
+
+    /**
+     * Runs one complete transient native session.
+     *
+     * <p>The finally block is part of the safety boundary, not just cleanup:
+     * showResult allocates Strings and repaints the Canvas, so it must not run
+     * until every KVM word has been restored. Restoration errors are retained
+     * for display rather than silently replacing a successful native result.</p>
+     */
+    private void runQuery() {
+        if (running) return;
+        running = true;
+        screen.removeCommand(queryCommand);
+        screen.removeCommand(exitCommand);
+        int error = 0;
+        Throwable thrown = null;
+        try {
+            error = runChain();
+            if (error == 0) {
+                // Restore the forged array BEFORE any streaming or allocation.
+                // The loader clears its own method binding on final run/free.
+                target[0x3FFFFFFF] = 1;
+                forged = false;
+                loadGame();
+                if (result[3] != 0) error = result[3];
+            }
+        } catch (Throwable t) { thrown = t;
+        } finally {
+            try {
+                if (queryMethod != 0 && result[84] != 0) {
+                    result[1] = 4;
+                    nativeQuery(result);
+                    queryMethod = 0;
+                }
+                restoreKvmState();
+            } catch (Throwable t) { if (thrown == null) thrown = t; error = 90; }
+            running = false;
+        }
+        screen.addCommand(queryCommand);
+        screen.addCommand(exitCommand);
+        showResult(error, thrown);
+    }
+
+    private static int resourceWord(InputStream in) throws IOException {
+        int a=in.read(), b=in.read(), c=in.read(), d=in.read();
+        if ((a|b|c|d)<0) throw new IOException("Truncated native header");
+        return a | (b<<8) | (c<<16) | (d<<24);
+    }
+    private void loaderCall(int op) throws IOException {
+        result[1]=op;
+        nativeQuery(result);
+        if (result[0]!=NATIVE_MAGIC || result[3]!=0)
+            throw new IOException("Loader check " + result[3]);
+    }
+    private void transfer(InputStream in, byte[] buf, int offset, int size) throws IOException {
+        while (size>0) {
+            int n=size>buf.length?buf.length:size;
+            int pos=0;
+            while (pos<n) {
+                int r=in.read(buf,pos,n-pos);
+                if (r<0) throw new IOException("Truncated native image");
+                if (r==0) { int c=in.read(); if(c<0)throw new IOException("Native EOF");buf[pos++]=(byte)c; }
+                else pos+=r;
+            }
+            for (int i=n;i<((n+3)&~3);i++)buf[i]=0;
+            for (int i=0;i<n;i+=4)result[96+(i>>2)]=littleEndianWord(buf,i);
+            result[12]=offset;result[13]=n;loaderCall(2);
+            offset+=n;size-=n;
+        }
+    }
+    private void loadGame() throws IOException {
+        InputStream in=QuakeLauncher.class.getResourceAsStream("/quake.bin");
+        if (in==null)throw new IOException("Missing quake.bin");
+        int memory, entry, relocations, stack;
+        try {
+            if(resourceWord(in)!=0x30443453 || resourceWord(in)!=1)
+                throw new IOException("Bad native image version");
+            int bytes=resourceWord(in);
+            memory=resourceWord(in);entry=resourceWord(in);
+            relocations=resourceWord(in);stack=resourceWord(in);
+            int reserved=resourceWord(in);
+            if(bytes<=0 || bytes>memory || memory>3*1024*1024 || (memory&3)!=0 ||
+                    entry<0 || entry>=bytes || relocations<0 || relocations>65536 ||
+                    stack!=196608 || reserved!=0)
+                throw new IOException("Bad native image bounds");
+            byte[] buf=new byte[4096];
+            result[11]=memory+4*relocations+stack;
+            loaderCall(1);
+            transfer(in,buf,0,bytes);
+            transfer(in,buf,memory,4*relocations);
+            if(in.read()!=-1)throw new IOException("Trailing native image bytes");
+        } finally { in.close(); }
+        result[12]=memory;result[13]=relocations;result[14]=entry;
+        result[1]=3;
+        // Native entry restores this method slot before running the engine.
+        // After it returns there is no callable native binding left.
+        queryMethod=0;
+        nativeQuery(result);
+    }
+
+    /**
+     * Returns a numeric error instead of allocating exception objects after
+     * target.length has been forged. All text is formatted after restoration.
+     */
+    private int runChain() throws IOException {
+        for (int i = 0; i < result.length; i++) result[i] = 0;
+        String platform = System.getProperty("microedition.platform");
+        if (platform == null || !platform.startsWith("Nokia301") ||
+                !(platform.endsWith("/02.33") || platform.endsWith("/2.33")))
+            throw new IOException("Requires Nokia 301 02.33: " + platform);
+        if (nativeBytes == null) {
+            /* Resource I/O happens before the critical allocation sequence. */
+            nativeBytes = readResource("/native.bin");
+        }
+        if (nativeBytes == null || (nativeBytes.length & 3) != 0 ||
+                nativeBytes.length == 0 || nativeBytes.length > 3072) {
+            return 1;
+        }
+
+        /* Measure the actual graphics conversion before trusting it as a length. */
+        int[] rgb = { FORGED_LENGTH };
+        Image source = Image.createRGBImage(rgb, 1, 1, true);
+        int[] measured = new int[1];
+        source.getRGB(measured, 0, 1, 0, 0, 1, 1);
+        result[3] = measured[0];
+        if (measured[0] != FORGED_LENGTH) return 3;
+
+        payload = null;
+        canary = null;
+        pointerBox = null;
+        target = null;
+        destination = null;
+        queryMethod = 0;
+        carrierCode = 0;
+        literalsPatched = false;
+        canaryDirty = false;
+        forged = false;
+        System.gc();
+
+        /* KVM splits these objects from the high end, in exactly this order. */
+        payload = new int[1024];
+        canary = new int[2];
+        pointerBox = new Object[4];
+        target = new int[1];
+        destination = new int[8];
+        canary[0] = 0x13579BDF;
+        canary[1] = 0x2468ACE0;
+        pointerBox[0] = payload;
+        pointerBox[1] = this;
+        pointerBox[2] = target;
+        pointerBox[3] = canary;
+
+        if (target.length != 1) return 4;
+        overflowedOnePixelWrite(source, destination, 11);
+        if (target.length != FORGED_LENGTH) return 5;
+        forged = true;
+        if (target[13] != 0x13579BDF || target[14] != 0x2468ACE0 ||
+                canary[0] != 0x13579BDF || canary[1] != 0x2468ACE0) return 6;
+
+        /* Prove a reversible cross-object write before reading broader metadata. */
+        canaryOriginal = canary[0];
+        canaryDirty = true;
+        target[13] = canaryOriginal + 1;
+        if (canary[0] != canaryOriginal + 1) return 7;
+        target[13] = canaryOriginal;
+        canaryDirty = false;
+        if (canary[0] != canaryOriginal) return 8;
+
+        int payloadObject = target[5];
+        int midletObject = target[6];
+        int targetObject = target[7];
+        int canaryObject = target[8];
+        if (payloadObject == 0 || midletObject == 0 || targetObject == 0 ||
+                canaryObject == 0 ||
+                ((payloadObject | midletObject | targetObject | canaryObject) & 3) != 0) return 9;
+        viewBase = targetObject + 12;
+        result[9] = payloadObject + 12;
+
+
+        int classObject = readWord(midletObject);
+        if (classObject == 0 || (classObject & 3) != 0) return 10;
+        int methodTable = readWord(classObject + 36);
+        if (methodTable == 0 || (methodTable & 3) != 0) return 10;
+        int methodCount = readWord(methodTable);
+        if (methodCount < 1 || methodCount > 512) return 10;
+        result[4] = classObject;
+        result[5] = methodTable;
+
+        queryMethod = findNativeMethod(methodTable, methodCount, classObject, 1);
+        if (queryMethod == 0) return 11;
+        result[8] = readWord(queryMethod + 20);
+        result[10] = readWord(queryMethod + 4);
+        if ((result[8] & 0xFFFF) != 0xC10A || result[10] != 0) return 12;
+        int carrierMethod = findCarrierMethod(methodTable, methodCount, classObject);
+        if (carrierMethod == 0) return 13;
+        carrierCode = readWord(carrierMethod + 4);
+        if (carrierCode == 0 || (carrierCode & 3) != 0 || !verifyCarrier(carrierCode)) return 14;
+        if (readWord(CACHE_SYNC) != CACHE_FIRST_WORD) return 17;
+        // @ROM_CHECKS@
+        int nativeAddress = payloadObject + 12;
+        copyWords(nativeBytes, payload, 0);
+        literal0 = readWord(carrierCode + 40);
+        literal1 = readWord(carrierCode + 48);
+        literal2 = readWord(carrierCode + 56);
+        literal3 = readWord(carrierCode + 64);
+        literalsPatched = true;
+        writeWord(carrierCode + 40, nativeAddress);
+        writeWord(carrierCode + 48, nativeBytes.length);
+        writeWord(carrierCode + 56, CACHE_SYNC);
+        writeWord(carrierCode + 64, nativeAddress);
+        if (readWord(carrierCode + 40) != nativeAddress ||
+                readWord(carrierCode + 48) != nativeBytes.length ||
+                readWord(carrierCode + 56) != CACHE_SYNC ||
+                readWord(carrierCode + 64) != nativeAddress) return 19;
+        result[80] = queryMethod + 4;
+        result[82] = nativeAddress;
+        result[83] = nativeBytes.length;
+        writeWord(queryMethod + 4, carrierCode + 13);
+        if (readWord(queryMethod + 4) != carrierCode + 13) return 18;
+        nativeQuery(result); // op 0 moves the loader to OS-owned RAM
+        if (!restoreCarrierLiterals()) return 20;
+        if (result[0] != NATIVE_MAGIC) return 16;
+        if (result[3] != 0 || result[84] == 0 ||
+                readWord(queryMethod + 4) != result[84]) return 18;
+        return 0;
+    }
+
+    private boolean restoreCarrierLiterals() {
+        if (!literalsPatched) return true;
+        writeWord(carrierCode + 40, literal0);
+        writeWord(carrierCode + 48, literal1);
+        writeWord(carrierCode + 56, literal2);
+        writeWord(carrierCode + 64, literal3);
+        /* Keep the dirty state on mismatch so the outer finally retries. */
+        if (readWord(carrierCode + 40) != literal0 ||
+                readWord(carrierCode + 48) != literal1 ||
+                readWord(carrierCode + 56) != literal2 ||
+                readWord(carrierCode + 64) != literal3) return false;
+        literalsPatched = false;
+        return true;
+    }
+
+    private void restoreKvmState() {
+        if (!forged) return;
+        /* Restore executable metadata before destroying the address window. */
+        if (queryMethod != 0) {
+            writeWord(queryMethod + 4, 0);
+            queryMethod = 0;
+        }
+        restoreCarrierLiterals();
+        if (canaryDirty) {
+            target[13] = canaryOriginal;
+            canaryDirty = false;
+        }
+        target[0x3FFFFFFF] = 1; // scaled index wraps back to target.length
+        forged = false;
+    }
+
+    private int findNativeMethod(int table, int count, int owner, int wantedArgs) {
+        int found = 0;
+        for (int i = 0; i < count; i++) {
+            int method = table + 4 + i * 32;
+            int flags = readWord(method + 20);
+            int args = readWord(method + 28) >>> 16;
+            if (readWord(method + 24) == owner && readWord(method + 4) == 0 &&
+                    (flags & 0x108) == 0x108 && args == wantedArgs) {
+                if (found != 0) return 0;
+                found = method;
+            }
+        }
+        return found;
+    }
+
+    private int findCarrierMethod(int table, int count, int owner) {
+        int found = 0;
+        for (int i = 0; i < count; i++) {
+            int method = table + 4 + i * 32;
+            int code = readWord(method + 4);
+            int args = readWord(method + 28) >>> 16;
+            if (code != 0 && (code & 3) == 0 && args == 1 &&
+                    readWord(method + 24) == owner &&
+                    (readWord(method + 20) & 0x100) == 0 && verifyCarrier(code)) {
+                if (found != 0) return 0;
+                found = method;
+            }
+        }
+        return found;
+    }
+
+    /** Require the exact generated body before executing any of its bytes. */
+    private boolean verifyCarrier(int code) {
+        if (readWord(code + 8) != 0x0A000000) return false; // big-endian npairs=10
+        for (int i = 0; i < 10; i++) {
+            if (readWord(code + 12 + i * 8) != expectedCarrierWord(i)) return false;
+        }
+        return true;
+    }
+
+    private static int expectedCarrierWord(int index) {
+            // @EXPECTED_CARRIER_WORDS@
+            return 0;
+    }
+
+    /**
+     * This Java switch is also the native stage. The generated sorted match
+     * values contain one Thumb instruction and one branch each. Java sees valid
+     * case offsets; native execution skips those offsets and uses four as data.
+     */
+    private static int carrierSwitch(int value) {
+        switch (value) {
+            // @CARRIER_CASES@
+            default: return 1;
+        }
+    }
+
+    private int readWord(int address) {
+        return target[(address - viewBase) >>> 2];
+    }
+
+    private void writeWord(int address, int value) {
+        target[(address - viewBase) >>> 2] = value;
+    }
+
+    private static void overflowedOnePixelWrite(Image image, int[] output, int d) {
+        /* Signed Java checks wrap; native geometry becomes one pixel and the
+         * unchecked destination becomes output[d]. */
+        image.getRGB(output, 0x40000000 + d, 0x40000001,
+                0x40000000, 0, 0x40000001, 1);
+    }
+
+    private static int littleEndianWord(byte[] bytes, int offset) {
+        return (bytes[offset] & 255) | ((bytes[offset + 1] & 255) << 8) |
+                ((bytes[offset + 2] & 255) << 16) | (bytes[offset + 3] << 24);
+    }
+
+    private static void copyWords(byte[] bytes, int[] words, int wordIndex) {
+        for (int i = 0; i < bytes.length; i += 4) {
+            words[wordIndex + (i >> 2)] = littleEndianWord(bytes, i);
+        }
+    }
+
+    private static byte[] readResource(String name) throws IOException {
+        InputStream input = QuakeLauncher.class.getResourceAsStream(name);
+        if (input == null) {
+            return null;
+        }
+        try {
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            byte[] buffer = new byte[256];
+            int count;
+            while ((count = input.read(buffer)) >= 0) {
+                if (count != 0) {
+                    output.write(buffer, 0, count);
+                }
+            }
+            return output.toByteArray();
+        } finally {
+            input.close();
+        }
+    }
+
+    private void showResult(int error, Throwable thrown) {
+        StringBuffer message = new StringBuffer();
+        for(int i=0;i<256;i++) {
+            int c=(result[16+(i>>2)] >>> ((i&3)*8))&255;
+            if(c==0)break;
+            message.append((char)c);
+        }
+        String text=message.toString();
+        lines = new String[15];
+        lines[0]=error==0&&thrown==null?"NATIVE QUAKE RETURNED":"QUAKE START/PLAY FAILED";
+        lines[1]=thrown==null?"Check " + error:thrown.toString();
+        lines[2]="Stage " + result[4] + " frames " + result[5];
+        lines[3]="Task " + result[6] + " app " + result[7];
+        lines[4]="Last key " + result[8] + " type " + result[9];
+        lines[5]="Native ms " + result[10];
+        if (error == 12) {
+            lines[2]="RM839 02.33 method flags";
+            lines[3]="Loader flags " + hex(result[8]);
+            lines[4]="Carrier-based bootstrap";
+            lines[5]="Loader code " + hex(result[10]);
+        } else if (error == 18) {
+            lines[2]="Loader status " + result[3];
+        }
+        for(int i=6;i<14;i++) {
+            int start=(i-6)*32;
+            lines[i]=start<text.length()?text.substring(start,Math.min(start+32,text.length())):"";
+        }
+        lines[14]="Start Quake = fresh session";
+        screen.repaint();screen.serviceRepaints();
+    }
+
+    private static String hex(int value) {
+        return "0x" + Integer.toHexString(value).toUpperCase();
+    }
+
+    private final class Screen extends Canvas {
+        Screen() { setFullScreenMode(true); }
+        protected void keyPressed(int key) {
+            if (!running && (key == KEY_NUM5 || key == -5))
+                commandAction(queryCommand, this);
+        }
+        protected void paint(Graphics graphics) {
+            int width = getWidth();
+            int height = getHeight();
+            graphics.setColor(0x000000);
+            graphics.fillRect(0, 0, width, height);
+            Font font = Font.getFont(Font.FACE_SYSTEM, Font.STYLE_PLAIN, Font.SIZE_SMALL);
+            graphics.setFont(font);
+            int lineHeight = font.getHeight() + 3;
+            int y = 5;
+            graphics.setColor(0x00FF80);
+            graphics.drawString("Quake", 6, y, Graphics.TOP | Graphics.LEFT);
+            y += lineHeight + 3;
+            graphics.setColor(0xFFFFFF);
+            for (int i = 0; i < lines.length && y < height; i++) {
+                graphics.drawString(lines[i], 6, y, Graphics.TOP | Graphics.LEFT);
+                y += lineHeight;
+            }
+        }
+    }
+}

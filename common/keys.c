@@ -75,6 +75,10 @@ typedef struct {
 } keyname_t;
 
 keyname_t keynames[] = {
+#ifdef S40
+    /* Original id1/default.cfg uses the pre-SDL modifier names. */
+    {"ALT", K_LALT}, {"CTRL", K_LCTRL}, {"SHIFT", K_LSHIFT},
+#endif
     {"TAB", K_TAB},
     {"ENTER", K_ENTER},
     {"ESCAPE", K_ESCAPE},

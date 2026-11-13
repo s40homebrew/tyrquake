@@ -1,0 +1,10 @@
+TyrQuake (libretro fork), based on Quake by id Software.
+Source: https://github.com/libretro/tyrquake
+Base commit: 9dcc3ff4ccf96d2f7aa029b738f2c90685b9257f (2024-12-27).
+Engine and RM-839 port: GPL-2.0-or-later; see COPYING.QUAKE and COPYING.RM839.
+The native bootstrap/runtime is adapted from the S40 Doom and ClassiCube ports. Shared foundation MIT notice: COPYING.S40.
+Libretro API header MIT notices are retained in COPYING.LIBRETRO.
+Newlib/libm and libgcc are from Arm GNU Toolchain 15.3.rel2 soft-float archives.
+See COPYING.NEWLIB, COPYING.GCC3 and COPYING.RUNTIME (GCC runtime exception).
+No Quake game data or complete Nokia firmware is included in this package.
+Addresses and short identity fingerprints bind to RM-839 firmware 02.33.

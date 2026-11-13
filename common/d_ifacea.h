@@ -42,7 +42,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	TURB_CYCLE	128
 
 // !!! if this is changed, it must be changed in r_shared.h too !!!
+#ifdef S40
+#define	MAXHEIGHT	320
+#else
 #define	MAXHEIGHT	1200
+#endif
 
 // !!! if this is changed, it must be changed in quakedef.h too !!!
 #define CACHE_SIZE	32	// used to align key data structures

@@ -702,6 +702,9 @@ void _Host_Frame(float time)
    if (cls.state >= ca_connected)
       CL_ReadFromServer();
 
+#ifdef S40
+   S_ExtraUpdate();
+#endif
    SCR_UpdateScreen();
    CL_RunParticles();
 
@@ -783,7 +786,7 @@ Host_Init(quakeparms_t *parms)
     NET_Init();
     SV_Init();
 
-    Con_Printf("Exe: " __TIME__ " " __DATE__ "\n");
+    Con_Printf("TyrQuake 0.62 / S40 0.3\n");
     Con_Printf("%4.1f megabyte heap\n", parms->memsize / (1024 * 1024.0));
 
     R_InitTextures();		// needed even for dedicated servers
@@ -824,7 +827,11 @@ Host_Init(quakeparms_t *parms)
 
     /* In case exec of quake.rc fails */
     if (!setjmp(host_abort)) {
+	#ifdef S40
+	Cbuf_InsertText("exec default.cfg\nexec config.cfg\nexec autoexec.cfg\n");
+#else
 	Cbuf_InsertText("exec quake.rc\n");
+#endif
 	Cbuf_Execute();
     }
 
