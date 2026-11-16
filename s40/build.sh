@@ -18,7 +18,7 @@ ARM_GCC=${ARM_GCC:-$(command -v arm-none-eabi-gcc)}
 for t in "$ARM_GCC" "$CC" "$LD" "$LLVM/llvm-objcopy" "$JAVA8_HOME/bin/java"; do
     test -x "$t" || { printf 'Missing tool: %s\n' "$t"; exit 1; }
 done
-python3 "$R/scripts/clean_build_outputs.py" java "$P" "$B" build "$P"
+python3 "$R/tools/clean_build_outputs.py" java "$P" "$B" build "$P"
 mkdir -p "$B/obj" "$B/classes" "$B/preverified" "$P/dist"
 # Compile the included engine source, including the S40 adaptations.
 python3 "$P/scripts/gen_imports.py"
@@ -30,7 +30,7 @@ FLAGS=(-std=gnu99 -target arm-none-eabi -march=armv6 -mtune=arm1176jz-s -marm -m
 # including future debug builds, without exposing the builder's home path.
 FLAGS+=("-ffile-prefix-map=$R=." "-ffile-prefix-map=$P/..=." "-ffile-prefix-map=$P=.")
 FLAGS+=("-DS40_FIXED_SPANS=$S40_FIXED_SPANS")
-FLAGS+=("-I$R/homebrew/runtime/include")
+FLAGS+=("-I$R/homebrew/include" "-I$R/homebrew/src/native")
 # Same portable engine source list as upstream, with the host system backend
 # replaced by quake_s40.c. audio_s40.c connects the original sound mixer;
 # ui_s40.c adapts original UI drawing while keeping small text at native size.
@@ -59,7 +59,7 @@ for s in libc quake_s40 newlib_support retro_s40 audio_s40 music_null ui_s40 spa
     "$CC" "${FLAGS[@]}" -include retro_inline.h -include strings.h -c "$P/native/$s.c" -o "$B/obj/$s.o"
     OBJECTS+=("$B/obj/$s.o")
 done
-for s in "$R/homebrew/runtime/native/audio.c" "$R/homebrew/runtime/audio/rm839_0233.c"; do
+for s in "$R/homebrew/src/native/audio/core.c" "$R/homebrew/src/native/audio/commgr/driver.c" "$R/homebrew/src/native/audio/devices/rm839_0233.c"; do
     object="$B/obj/shared_$(basename "${s%.c}").o"
     "$CC" "${FLAGS[@]}" -c "$s" -o "$object"
     OBJECTS+=("$object")

@@ -106,7 +106,7 @@ provides buffered file operations; `ui_s40.c` adapts the HUD and menu drawing;
 `audio_s40.c` connects the original mixer to the shared PCM stream.
 
 Core firmware bindings are in `docs/abi.json`; audio bindings are in the SDK's
-`homebrew/runtime/audio/rm839_0233_abi.json`. See the
+`homebrew/src/native/audio/devices/rm839_0233_abi.json`. See the
 [Doom firmware notes](https://github.com/s40homebrew/doom/blob/s40/s40/rm839/docs/firmware.md)
 for the common bootstrap and ABI contracts, and the SDK's
 [audio guide](https://github.com/s40homebrew/s40/blob/main/homebrew/docs/audio.md)

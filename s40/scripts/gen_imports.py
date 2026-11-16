@@ -12,7 +12,7 @@ abi = json.loads((P / "docs/abi.json").read_text())
 from quake_paths import SDK_ROOT
 
 abi.update(
-    json.loads((SDK_ROOT / "homebrew/runtime/audio/rm839_0233_abi.json").read_text())
+    json.loads((SDK_ROOT / "homebrew/src/native/audio/devices/rm839_0233_abi.json").read_text())
 )
 s = [".syntax unified", ".arm", ".text"]
 imports = {}
