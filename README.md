@@ -17,6 +17,8 @@ bash s40/build.sh
 
 Outputs: `s40/dist/RM839NativeQuake.jar` and its matching `.jad`.
 The shared SDK supplies the PCM audio runtime and firmware adapter.
+Builds require no firmware dumps. See the [port guide](s40/README.md)
+for controls, configuration and build options.
 
 ## Play
 
