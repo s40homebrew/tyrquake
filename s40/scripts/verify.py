@@ -39,6 +39,8 @@ with zipfile.ZipFile(jar) as archive:
             )
     outer = archive.read("QuakeLauncher.class")
     require(b"StackMap" in outer, "launcher has CLDC stack maps")
+    for name in ["FirmwareResolver.class", "Rm839Memory.class", "AudioPolicyBindings.class"]:
+        require(name in archive.namelist(), "packaged audio discovery dependency: " + name)
     for name in ["native.bin", "quake.bin"]:
         require(archive.read(name) == (B / name).read_bytes(), "packaged " + name)
 
@@ -81,6 +83,9 @@ symbols = subprocess.check_output(
     [llvm_tool("llvm-nm"), "-u", str(B / "quake.elf")], text=True
 )
 require(not symbols.strip(), "no unresolved game imports")
+imports = json.loads((B / "imports.json").read_text())
+require(not any(name.startswith("fw_audio_") for name in imports),
+        "audio is resolved at runtime, not emitted as fixed veneers")
 data = (B / "quake.bin").read_bytes()
 magic, version, size, memory, entry, count, stack, reserved = struct.unpack_from(
     "<8I", data

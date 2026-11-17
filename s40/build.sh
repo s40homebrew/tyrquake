@@ -6,6 +6,7 @@ S40_SDK_ROOT=${S40_SDK_ROOT:-$(CDPATH='' cd -- "$P/../.." && pwd)/main}
 source "$S40_SDK_ROOT/tools/env.sh"
 export S40_SDK_ROOT
 R="$S40_SDK_ROOT"
+source "$R/homebrew/tools/sources.sh"
 B="$P/build"
 UPSTREAM="$P/../common"
 S40_OPT_LEVEL=${S40_OPT_LEVEL:-3}
@@ -21,6 +22,8 @@ done
 python3 "$R/tools/clean_build_outputs.py" java "$P" "$B" build "$P"
 mkdir -p "$B/obj" "$B/classes" "$B/preverified" "$P/dist"
 # Compile the included engine source, including the S40 adaptations.
+python3 "$R/homebrew/tools/gen_imports.py" "$B/services"
+s40_generate_signatures "$B/signatures"
 python3 "$P/scripts/gen_imports.py"
 python3 "$P/scripts/gen_carrier.py"
 # Firmware type_15_defines identifies ARM1176JZ-S. Tune scheduling for it,
@@ -30,7 +33,7 @@ FLAGS=(-std=gnu99 -target arm-none-eabi -march=armv6 -mtune=arm1176jz-s -marm -m
 # including future debug builds, without exposing the builder's home path.
 FLAGS+=("-ffile-prefix-map=$R=." "-ffile-prefix-map=$P/..=." "-ffile-prefix-map=$P=.")
 FLAGS+=("-DS40_FIXED_SPANS=$S40_FIXED_SPANS")
-FLAGS+=("-I$R/homebrew/include" "-I$R/homebrew/src/native")
+FLAGS+=("-I$R/homebrew/include" "-I$R/homebrew/src/native" "-I$B/services")
 # Same portable engine source list as upstream, with the host system backend
 # replaced by quake_s40.c. audio_s40.c connects the original sound mixer;
 # ui_s40.c adapts original UI drawing while keeping small text at native size.
@@ -59,7 +62,7 @@ for s in libc quake_s40 newlib_support retro_s40 audio_s40 music_null ui_s40 spa
     "$CC" "${FLAGS[@]}" -include retro_inline.h -include strings.h -c "$P/native/$s.c" -o "$B/obj/$s.o"
     OBJECTS+=("$B/obj/$s.o")
 done
-for s in "$R/homebrew/src/native/audio/core.c" "$R/homebrew/src/native/audio/commgr/driver.c" "$R/homebrew/src/native/audio/devices/rm839_0233.c"; do
+for s in "$R/homebrew/src/native/audio/core.c" "$R/homebrew/src/native/audio/commgr/driver.c" "$R/homebrew/src/native/audio/services.c"; do
     object="$B/obj/shared_$(basename "${s%.c}").o"
     "$CC" "${FLAGS[@]}" -c "$s" -o "$object"
     OBJECTS+=("$object")
@@ -79,7 +82,7 @@ printf 'Building bootstrap loader and CLDC launcher...\n'
 "$LD" -T "$P/native/loader.ld" -o "$B/loader.elf" "$B/loader-s.o" "$B/loader-c.o"
 "$LLVM/llvm-objcopy" -O binary "$B/loader.elf" "$B/native.bin"
 "$LLVM/llvm-objdump" -d "$B/loader.elf" > "$B/loader.disasm.txt"
-"$JAVA8_HOME/bin/java" -cp "$LEGACY_JAVAC" j2me.thirdparty.legacyjavac.Main -source 1.3 -target 1.1 -g:none -bootclasspath "$SDK_CLASSES" -d "$B/classes" "$B/QuakeLauncher.java"
+"$JAVA8_HOME/bin/java" -cp "$LEGACY_JAVAC" j2me.thirdparty.legacyjavac.Main -source 1.3 -target 1.1 -g:none -bootclasspath "$SDK_CLASSES" -d "$B/classes" "$B/services/FirmwareApi.java" "${S40_RESOLVER_JAVA_SOURCES[@]}" "${S40_SIGNATURE_JAVA_SOURCES[@]}" "$B/QuakeLauncher.java"
 python3 "$R/homebrew/tools/preverify.py" "$JAVA8_HOME/bin/java" "$PROGUARD_JAR" "$SDK_CLASSES" "$B/classes" "$B/preverified"
 "$JAVA8_HOME/bin/javap" -classpath "$B/preverified" -c -p -v QuakeLauncher > "$B/QuakeLauncher.javap.txt"
 cp "$B/native.bin" "$B/quake.bin" "$B/preverified/"

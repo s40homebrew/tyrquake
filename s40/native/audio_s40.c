@@ -4,15 +4,42 @@
 #include "sound.h"
 #include "s40/audio.h"
 #include "s40/audio_clock.h"
+#include "audio/services.h"
+#include "audio/commgr/driver.h"
+#include "firmware_api.h"
 #include <string.h>
 
 static int16_t ring[AUDIO_BUFFER_SIZE];
 static unsigned submitted;
+static audio_abi audio_services;
+static int resolved_open(const s40_audio_format *format) {
+    return audio_cm_open(&audio_services, format);
+}
+static const s40_audio_driver resolved_driver = {
+    resolved_open, audio_cm_write, audio_cm_queued, audio_cm_status, audio_cm_close
+};
+static int bind_audio(void) {
+    s40_audio_bind(NULL);
+    if (!audio_cm_available() || !s40_result ||
+            s40_result[FW_API_DESCRIPTOR + API_AUDIO_ABI] != FW_AUDIO_ABI_DEVICE_MEDIA ||
+            !audio_abi_from_services(s40_result + FW_API_DESCRIPTOR, &audio_services))
+        return 0;
+    /* Keep this port's established WAV stream and native volume units. The
+     * shared resolver supplies addresses; transport choice belongs to the port. */
+    audio_services.transport = AUDIO_TRANSPORT_WAV;
+    audio_services.volume_percent = 0;
+    audio_services.route = AUDIO_ROUTE_EXISTING;
+    s40_audio_bind(&resolved_driver);
+    return 1;
+}
 static s40_audio_clock play_clock;
 
 qboolean SNDDMA_Init(dma_t *dma) {
     const s40_audio_format format={11025,2,60,160};
-    s40_audio_bind(&s40_audio_rm839_0233);
+    if (!bind_audio()) {
+        printf("Audio services unavailable; continuing silently\n");
+        return false;
+    }
     int status=s40_audio_open(&format);
     if (status<0) {
         printf("Audio unavailable; continuing silently (stage %d)\n",-status);

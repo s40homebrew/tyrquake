@@ -3,7 +3,8 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdio.h>
-/* All firmware pointers are exact RM-839 02.33 addresses. See docs/abi.json. */
+/* Core entry points remain specific to RM-839 02.33; see docs/abi.json.
+ * Audio uses the SDK resolver and does not add fixed entry points here. */
 void *fw_os_block_alloc_no_wait(unsigned); void fw_os_block_dealloc(void *);
 uint32_t fw_os_current_time_read_in_ms(void); unsigned fw_os_task_own_id_read(void);
 unsigned fw_msg_count(void); uintptr_t fw_os_msg_receive(void);

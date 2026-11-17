@@ -33,6 +33,7 @@ public final class QuakeLauncher extends MIDlet implements CommandListener {
         "5 / center: Start Quake"
     };
     private int[] result;
+    private FirmwareResolver audioServices;
     private byte[] nativeBytes;
     private boolean running;
 
@@ -40,7 +41,7 @@ public final class QuakeLauncher extends MIDlet implements CommandListener {
      * [0] magic [1] command [2] allocated image [3] status
      * [4..10] native diagnostics [11..14] loading bounds/entry
      * [16..79] error text [80] method slot to restore [96..1119] 4KiB transfer.
-     * No transfer calls occur once the game starts.
+     * [1120..] shared resolved services. No transfer calls occur once the game starts.
      */
 
     /* Temporary bootstrap objects. No UI objects are allocated while forged. */
@@ -66,7 +67,8 @@ public final class QuakeLauncher extends MIDlet implements CommandListener {
 
     protected void startApp() {
         if (screen == null) {
-            result = new int[1120];
+            result = new int[FirmwareApi.DESCRIPTOR + FirmwareApi.COUNT];
+            audioServices = new FirmwareResolver(new Rm839Memory(), FirmwareResolver.CAP_AUDIO);
             screen = new Screen();
             screen.addCommand(queryCommand);
             screen.addCommand(exitCommand);
@@ -287,6 +289,12 @@ public final class QuakeLauncher extends MIDlet implements CommandListener {
         if (carrierCode == 0 || (carrierCode & 3) != 0 || !verifyCarrier(carrierCode)) return 14;
         if (readWord(CACHE_SYNC) != CACHE_FIRST_WORD) return 17;
         // @ROM_CHECKS@
+        // The existing launcher owns core/bootstrap validation. Audio uses the
+        // same bounded service resolver as the SDK, before restoring this view.
+        // An absent optional capability leaves zero slots and silent gameplay.
+        if (audioServices.resolveServices(target, viewBase))
+            for (int i = 0; i < FirmwareApi.COUNT; i++)
+                result[FirmwareApi.DESCRIPTOR + i] = audioServices.api[i];
         int nativeAddress = payloadObject + 12;
         copyWords(nativeBytes, payload, 0);
         literal0 = readWord(carrierCode + 40);
